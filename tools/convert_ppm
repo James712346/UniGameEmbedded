@@ -1,0 +1,28 @@
+#!/bin/bash
+# Set script directory (even if script is run from elsewhere)
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Define paths relative to script location
+assetfile="$script_dir/../src/assets.h"
+ppm_dir="$script_dir/../assets"
+
+# Convert PNG to PPM
+mogrify -format ppm "$ppm_dir"/*.png
+
+# Create new assets.h
+echo "// Assets.h" > "$assetfile"
+echo '#include <stdint.h>' >> "$assetfile"
+echo '#include "grlib.h"' >> "$assetfile"
+
+# Generate asset definitions
+for file in "$ppm_dir"/*.ppm; do
+    filename=$(basename "${file%.*}")
+    formatted_name="$(echo "${filename:0:1}" | tr '[:lower:]' '[:upper:]')$(echo "${filename:1}" | tr '[:upper:]' '[:lower:]')"
+    
+    echo "// file: $formatted_name.ppm" >> "$assetfile"
+    ${script_dir}/pnmtoc -c "$file" | sed "s/g_pui8Image/asset${formatted_name}/" >> "$assetfile"
+done
+
+echo "Completed File"
+cat "$assetfile"
+
