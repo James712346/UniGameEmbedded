@@ -225,7 +225,7 @@ int NewItem(item_t *newItem, uint32_t screenWidth){
     itemsList[i].status = ACTIVE;
     itemsList[i].type = randInt(3)+1;
     itemsList[i].currentlocation.y = 24;
-    itemsList[i].currentlocation.x = randInt(screenWidth-1);
+    itemsList[i].currentlocation.x = randInt(screenWidth-33)+16;
     return 0;
 }
 /*
