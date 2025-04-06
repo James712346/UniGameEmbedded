@@ -87,10 +87,10 @@
 #include "drivers/Kentec320x240x16_ssd2119_spi.h"
 #include "drivers/touch.h"
 
-#define MAX_ITEMS 10
+#define MAX_ITEMS 25
+#define MAX_LIVES 5
 #define collectionLevel 225
 #define deductionLevel 230
-#define MAX_LIVES 5
 #define rand_a 1103515245
 #define rand_c 12345
 
@@ -193,7 +193,6 @@ volatile item_t itemsList[MAX_ITEMS];
  */
 tContext sContext;
 tRectangle sRect;
-volatile bool UpdateDisplay = true;
 volatile bool UpdateDisplay = true;
 
 /*
@@ -375,20 +374,6 @@ void xTimerHandlerA(void) {
 
 void xTimerHandlerB(void){
     TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
-<<<<<<< HEAD
-=======
-
->>>>>>> d15f9d6 (updated the display logic by removing the semapt)
-    /* Update only time based game variables here*/
-    // e.g. fruit location
-    for (int i = 0; i < MAX_ITEMS; i++){
-        if ((itemsList[i].status == INACTIVE) ||(deductionLevel == (itemsList[i].currentlocation.y + 16))){
-            continue;
-        }
-        itemsList[i].currentlocation.y += 10;
-    }
-    UpdateDisplay = true;
-
     /* Update only time based game variables here*/
     // e.g. fruit location
     for (int i = 0; i < MAX_ITEMS; i++){
@@ -399,9 +384,6 @@ void xTimerHandlerB(void){
     }
     UpdateDisplay = true;
 }
-
-
-
 
 void xButtonsHandler(void) {
     BaseType_t xLEDTaskWoken;
@@ -521,8 +503,6 @@ static void prvDisplayTask(void *pvParameters) {
             drawFruit(&sContext, itemsList);
             drawBasket(sContext, basket);
         }
-
-        
     }
 }
 /*-----------------------------------------------------------*/
