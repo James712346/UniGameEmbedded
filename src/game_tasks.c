@@ -408,10 +408,12 @@ void DrawGame(tContext sContent){
  */
 void DrawStatusBar(tContext sContext){
     GrContextForegroundSet(&sContext, ClrDarkBlue);
-    GrRectFill(&sContext, &sRect);
+    GrRectFill(&sContext, &statusbar);
     for (int i=0; i < MAX_LIVES; i++){
         if (0 <= (i - basket.lives)){
-            GrTransparentImageDraw(&sContext, assetHeart, (MAX_LIVES - i)*9,5, ClrWhite);
+            GrTransparentImageDraw(&sContext, assetHeart, GrContextDpyWidthGet(&sContext) - (MAX_LIVES - i)*17 - 1,5, ClrBlack);
+        } else {
+            GrTransparentImageDraw(&sContext, assetHeartlost, GrContextDpyWidthGet(&sContext) - (MAX_LIVES - i)*17 - 1,5, ClrBlack);
         }
     }
 }
@@ -429,8 +431,6 @@ static void prvDisplayTask(void *pvParameters) {
     // Initialize the graphics context.
     //
     GrContextInit(&sContext, &g_sKentec320x240x16_SSD2119);
-    DrawGame(sContext);
-    DrawStatusBar(sContext);
     backdrop.i16XMin = 0;
     backdrop.i16YMin = 24;
     backdrop.i16XMax = GrContextDpyWidthGet(&sContext) - 1;
@@ -443,6 +443,8 @@ static void prvDisplayTask(void *pvParameters) {
     statusbar.i16YMin = 0;
     statusbar.i16XMax = GrContextDpyWidthGet(&sContext) - 1;
     statusbar.i16YMax = 23;
+    DrawGame(sContext);
+    DrawStatusBar(sContext);
     //
     // Main loop for display task
     //
@@ -451,8 +453,10 @@ static void prvDisplayTask(void *pvParameters) {
         if (xSemaphoreTake(xButtonSemaphore, portMAX_DELAY) == pdPASS) {
             /* If the right button is hit, either increment by 1 or reset the
              * index to 0 if it is at 3. */
+            DrawStatusBar(sContext);
             DrawGame(sContext);
             item_t *newitem;
+            basket.lives+=1;
             NewItem(newitem, GrContextDpyWidthGet(&sContext));
             drawFruit(&sContext, itemsList);
         }
