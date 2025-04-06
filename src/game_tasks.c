@@ -194,6 +194,7 @@ volatile item_t itemsList[MAX_ITEMS];
 tContext sContext;
 tRectangle sRect;
 volatile bool UpdateDisplay = true;
+volatile bool UpdateDisplay = true;
 
 /*
  * Clear Item List
@@ -374,6 +375,15 @@ void xTimerHandlerA(void) {
 
 void xTimerHandlerB(void){
     TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
+    /* Update only time based game variables here*/
+    // e.g. fruit location
+    for (int i = 0; i < MAX_ITEMS; i++){
+        if ((itemsList[i].status == INACTIVE) ||(deductionLevel == (itemsList[i].currentlocation.y + 16))){
+            continue;
+        }
+        itemsList[i].currentlocation.y += 10;
+    }
+    UpdateDisplay = true;
 
     /* Update only time based game variables here*/
     // e.g. fruit location
