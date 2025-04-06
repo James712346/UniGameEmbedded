@@ -174,6 +174,7 @@ volatile item_t itemsList[MAX_ITEMS];
  */
 tContext sContext;
 tRectangle sRect;
+volatile bool UpdateDisplay = true;
 
 /*
  * Clear Item List
@@ -230,6 +231,8 @@ int drawFruit(tContext *context, item_t items[MAX_ITEMS]){
  * The tasks as described in the comments at the top of this file.
  */
 static void prvDisplayTask(void *pvParameters);
+static void prvGameLogicTask(void *pvParameters);
+
 
 /*
  * Called by main() to do example specific hardware configurations and to
@@ -274,8 +277,10 @@ void vCreateDisplayTask(void) {
      *  - The parameter passed to the task - just to check the functionality.
      *  - The priority assigned to the task.
      *  - The task handle is not required, so NULL is passed. */
-    xTaskCreate(prvDisplayTask, "LED", configMINIMAL_STACK_SIZE, NULL,
+    xTaskCreate(prvDisplayTask, "Display", configMINIMAL_STACK_SIZE, NULL,
             tskIDLE_PRIORITY + 1, NULL);
+    xTaskCreate(prvGameLogicTask, "GameLogicTask", configMINIMAL_STACK_SIZE, NULL,
+            tskIDLE_PRIORITY + 2, NULL);
 }
 
 static void prvConfigureLED(void) {
@@ -355,6 +360,7 @@ void xTimerHandlerA(void) {
         }
         itemsList[i].currentlocation.y += 10;
     }
+    UpdateDisplay = true;
 }
 
 
@@ -371,6 +377,7 @@ void xTimerHandlerB(void) {
         }
         itemsList[i].currentlocation.y += 10;
     }
+    UpdateDisplay = true;
 }
 
 
@@ -412,6 +419,7 @@ void xButtonsHandler(void) {
 
     /* Update the time stamp. */
     g_ui32TimeStamp = xTaskGetTickCount();
+    UpdateDisplay = false;
 }
 /*-----------------------------------------------------------*/
 
@@ -479,16 +487,31 @@ static void prvDisplayTask(void *pvParameters) {
     //
     for (;;) {
         /* Block until the Push Button ISR gives the semaphore. */
-        if (xSemaphoreTake(xButtonSemaphore, portMAX_DELAY) == pdPASS) {
-            /* If the right button is hit, either increment by 1 or reset the
-             * index to 0 if it is at 3. */
+
+
+        // if (xSemaphoreTake(xButtonSemaphore, portMAX_DELAY) == pdPASS) {
+        // }
+        if(UpdateDisplay){
+            UpdateDisplay = false;
             DrawStatusBar(sContext);
             DrawGame(sContext);
-            item_t *newitem;
-            basket.lives+=1;
-            NewItem(newitem, GrContextDpyWidthGet(&sContext));
             drawFruit(&sContext, itemsList);
         }
+
+        
     }
 }
 /*-----------------------------------------------------------*/
+
+
+static void prvGameLogicTask(void *pvParameters){
+    
+    for(;;){
+        basket.lives+=1;
+        item_t *newitem;
+        NewItem(newitem, GrContextDpyWidthGet(&sContext));
+        
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        
+    }
+}
