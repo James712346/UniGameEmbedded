@@ -98,6 +98,7 @@
 volatile uint32_t seed = 1;
 volatile bool g_bMoveRight = false;
 volatile bool g_bMoveLeft = false;
+volatile uint8_t score = 0;
 
 // Linear Congruential Generator (LCG)
 int randInt(uint32_t modulus){
@@ -147,7 +148,7 @@ tRectangle basketLine;
 SemaphoreHandle_t xDisplaySemaphore = NULL;
 
 void initBasket(tContext sContext){
-    basket.size = 60;
+    basket.size = 100;
     basket.currentLocation.x = GrContextDpyWidthGet(&sContext)/2;
     basket.lives = 0;
 }
@@ -187,6 +188,7 @@ typedef struct item_t {
     enum itemType type; // Falling items can be a powerup, or fruit
     struct location currentlocation; // Current location of the item x, y
     uint8_t level; // Level (aka speed) of the item.
+    struct location previouslocation;
 } item_t;
 
 // Share Item List;
@@ -228,14 +230,50 @@ int NewItem(item_t *newItem, uint32_t screenWidth){
     itemsList[i].type = randInt(3)+1;
     itemsList[i].currentlocation.y = 24;
     itemsList[i].currentlocation.x = randInt(screenWidth-33)+16;
+    itemsList[i].previouslocation.y =24;
+    itemsList[i].previouslocation.x = randInt(screenWidth-33)+16;
+
     return 0;
 }
 /*
  *
  * @arg items Expecting a copy of items list
  */
-int drawFruit(tContext *context, item_t items[MAX_ITEMS]){
-    for (int i=0; i < MAX_ITEMS; i++){
+int drawFruit(tContext *context, item_t items[MAX_ITEMS]) {
+    for (int i = 0; i < MAX_ITEMS; i++) {
+        if (items[i].status == INACTIVE) {
+            if (items[i].previouslocation.x != 0 || items[i].previouslocation.y != 0) {
+                tRectangle clearRect;
+                clearRect.i16XMin = items[i].previouslocation.x;
+                clearRect.i16YMin = items[i].previouslocation.y;
+                clearRect.i16XMax = items[i].previouslocation.x + 16;
+                clearRect.i16YMax = items[i].previouslocation.y + 16;
+                
+                GrContextForegroundSet(&sContext, ClrLightBlue);
+                GrRectFill(&sContext, &clearRect);
+                
+                items[i].previouslocation.x = 0;
+                items[i].previouslocation.y = 0;
+            }
+            continue;
+        }
+        
+        if (items[i].previouslocation.x != items[i].currentlocation.x || 
+            items[i].previouslocation.y != items[i].currentlocation.y) {
+            
+            tRectangle clearRect;
+            clearRect.i16XMin = items[i].previouslocation.x;
+            clearRect.i16YMin = items[i].previouslocation.y;
+            clearRect.i16XMax = items[i].previouslocation.x + 16;
+            clearRect.i16YMax = items[i].previouslocation.y + 16;
+            
+            GrContextForegroundSet(&sContext, ClrLightBlue);
+            GrRectFill(&sContext, &clearRect);
+            
+            items[i].previouslocation.x = items[i].currentlocation.x;
+            items[i].previouslocation.y = items[i].currentlocation.y;
+        }
+
         uint8_t *asset;
         switch (items[i].type) {
             case BANANA:      asset = assetBanana; break;
@@ -244,7 +282,7 @@ int drawFruit(tContext *context, item_t items[MAX_ITEMS]){
             case WATERMELON:  asset = assetWatermelon; break;
             default: return 1;
         }
-        GrTransparentImageDraw(&sContext, asset, items[i].currentlocation.x,items[i].currentlocation.y, 0x00);
+        GrTransparentImageDraw(&sContext, asset, items[i].currentlocation.x, items[i].currentlocation.y, 0x00);
     }
     return 0;
 }
@@ -360,21 +398,16 @@ static void prvConfigureHWTimer(void) {
 /*-----------------------------------------------------------*/
 
 void xTimerHandlerA(void) {
-
-    /* Clear the hardware interrupt flag for Timer 0A. */
     TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
-
-    /* Update only time based game variables here*/
-    // e.g. fruit location
+    
     for (int i = 0; i < MAX_ITEMS; i++){
-        if(deductionLevel == (itemsList[i].currentlocation.y + 16)){
-            itemsList[i].status = INACTIVE;
-        }
-        if ((itemsList[i].status == INACTIVE) ||(deductionLevel == (itemsList[i].currentlocation.y + 16))){
+        if (itemsList[i].status == INACTIVE) {  
             continue;
         }
+        itemsList[i].previouslocation.y = itemsList[i].currentlocation.y;
         itemsList[i].currentlocation.y += 10;
     }
+    
     xSemaphoreGiveFromISR(xDisplaySemaphore, &xHigherPriorityTaskWoken);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
@@ -428,35 +461,37 @@ void xButtonsHandler(void) {
 
 void checkItems(){
     for (int i = 0; i < MAX_ITEMS; i++){
-        // Take the Item Semaphone Here!
         if (itemsList[i].status == INACTIVE){
-            // Give Back Item Semaphone
             continue;
         }
-        if (itemsList[i].currentlocation.y+16 >= deductionLevel){
-            itemsList[i].status = INACTIVE;
-            // Take Basket Semaphone
-            if (basket.lives <= MAX_LIVES){
-                basket.lives += 1;
-            } else {
-                // Call Game over
-            }
-            // Give back both Semaphones
-            continue;
-        }
-
-        if (itemsList[i].currentlocation.y+16 >= collectionLevel){
-            // Take Basket Semaphone Here!
-            int delta = basket.size/2;
-            int upperBound = basket.currentLocation.x + delta;
-            int lowerBound = basket.currentLocation.x - delta;
-            if  ( lowerBound <= itemsList[i].currentlocation.x <= upperBound || lowerBound <= itemsList[i].currentlocation.x + 16 <= upperBound){
+        
+        int itemBottomY = itemsList[i].currentlocation.y+10;
+        if (itemBottomY >= collectionLevel){
+            int delta = basket.size/2 - 24;
+            int basketLeftEdge = basket.currentLocation.x - delta - 16; 
+            int basketRightEdge = basket.currentLocation.x + delta + 16;
+            
+            int itemLeftEdge = itemsList[i].currentlocation.x;
+            int itemRightEdge = itemsList[i].currentlocation.x + 16;
+            
+            if ((itemRightEdge >= basketLeftEdge) && (itemLeftEdge <= basketRightEdge)){
                 itemsList[i].status = INACTIVE;
+                score += 1; 
+                
+                xSemaphoreGive(xDisplaySemaphore);
             }
-            // Give back both Semaphones
         }
-        // Give back Item Semaphone
 
+        if (itemBottomY >= deductionLevel){
+            if ((basket.lives < MAX_LIVES)&&(itemsList[i].status != INACTIVE)){
+                basket.lives += 1;
+
+            }
+            itemsList[i].status = INACTIVE;
+            continue;
+        }
+        
+        
     }
 }
 
@@ -476,15 +511,38 @@ void DrawGame(tContext sContent){
     GrContextForegroundSet(&sContext, ClrRed);
     GrRectFill(&sContext,&lava);
 
-    drawFruit(&sContext, itemsList);
 }
 
+void DrawBottom(tContext sContent){
+    GrContextForegroundSet(&sContext, ClrLightBlue);
+    tRectangle bottomBackdrop;
+    bottomBackdrop.i16XMin = 0;
+    bottomBackdrop.i16YMin = deductionLevel-12; 
+    bottomBackdrop.i16XMax = GrContextDpyWidthGet(&sContext) - 1;
+    bottomBackdrop.i16YMax = deductionLevel - 1;
+    GrRectFill(&sContext, &bottomBackdrop);
+    
+    GrContextForegroundSet(&sContext, ClrRed);
+    GrRectFill(&sContext, &lava);
+}
 /**
  * Draw Hearts
  */
 void DrawStatusBar(tContext sContext){
     GrContextForegroundSet(&sContext, ClrDarkBlue);
     GrRectFill(&sContext, &statusbar);
+    
+    GrContextFontSet(&sContext, &g_sFontCm20);
+    
+    GrContextForegroundSet(&sContext, ClrWhite);
+    
+    char scoreText[16];
+    usnprintf(scoreText, sizeof(scoreText), "Score: %u", score);
+    
+    GrStringDraw(&sContext, scoreText, -1, 5, 5, false);
+    
+    GrContextForegroundSet(&sContext, ClrBlack);
+    
     for (int i=0; i < MAX_LIVES; i++){
         if (0 <= (i - basket.lives)){
             GrTransparentImageDraw(&sContext, assetHeart, GrContextDpyWidthGet(&sContext) - (MAX_LIVES - i)*17 - 1,5, ClrBlack);
@@ -532,11 +590,10 @@ static void prvDisplayTask(void *pvParameters) {
         // if () {
         // }
         if(xSemaphoreTake(xDisplaySemaphore,portMAX_DELAY) == pdPASS){
-
-            DrawStatusBar(sContext);
-            DrawGame(sContext);
+            DrawBottom(sContext);
             drawFruit(&sContext, itemsList);
             drawBasket(sContext, basket);
+            DrawStatusBar(sContext);
         }
 
     }
@@ -547,18 +604,26 @@ static void prvDisplayTask(void *pvParameters) {
 static void prvGameLogicTask(void *pvParameters)
 {
     TickType_t xLastUpdateTime = xTaskGetTickCount();
-    const TickType_t xInterval = pdMS_TO_TICKS(1000); 
-    const int moveStep = 1;  
+    TickType_t xLastMoveTime = xLastUpdateTime;
+    
+    const TickType_t xItemInterval = pdMS_TO_TICKS(1000); 
+    const TickType_t xMoveInterval = 10;
+    const int moveStep = 1;
 
-    for(;;)
+    for (;;)
     {
-        if (g_bMoveRight) {
-            basket.currentLocation.x += moveStep;
+        TickType_t xCurrentTime = xTaskGetTickCount();
+
+        if ((xCurrentTime - xLastMoveTime) >= xMoveInterval) {
+            if (g_bMoveRight) {
+                basket.currentLocation.x += moveStep;
+            }
+            if (g_bMoveLeft) {
+                basket.currentLocation.x -= moveStep;
+            }
+            xLastMoveTime = xCurrentTime;
         }
-        if (g_bMoveLeft) {
-            basket.currentLocation.x -= moveStep;
-        }
-        
+
         if (GPIOPinRead(BUTTONS_GPIO_BASE, USR_SW1) != 0) {
             g_bMoveRight = false;
         }
@@ -566,14 +631,14 @@ static void prvGameLogicTask(void *pvParameters)
             g_bMoveLeft = false;
         }
 
-        TickType_t xCurrentTime = xTaskGetTickCount();
-        if ((xCurrentTime - xLastUpdateTime) >= xInterval) {
-            basket.lives += 1;
+        if ((xCurrentTime - xLastUpdateTime) >= xItemInterval) {
             item_t *newitem;
             NewItem(newitem, GrContextDpyWidthGet(&sContext));
             xLastUpdateTime = xCurrentTime;
         }
 
-        vTaskDelay(pdMS_TO_TICKS(10));
+        checkItems();
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
+
