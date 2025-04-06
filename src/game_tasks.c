@@ -96,6 +96,8 @@
 
 
 volatile uint32_t seed = 1;
+volatile bool g_bMoveRight = false;
+volatile bool g_bMoveLeft = false;
 
 // Linear Congruential Generator (LCG)
 int randInt(uint32_t modulus){
@@ -403,11 +405,9 @@ void xButtonsHandler(void) {
     if ((xTaskGetTickCount() - g_ui32TimeStamp) > 100) {
         /* Log which button was pressed to trigger the ISR. */
         if ((ui32Status & USR_SW1)) {
-            g_pui32ButtonPressed = USR_SW1;
-            basket.currentLocation.x+=10;
+            g_bMoveRight = true;
         } else if ((ui32Status & USR_SW2)) {
-            g_pui32ButtonPressed = USR_SW2;
-            basket.currentLocation.x-=10;
+            g_bMoveLeft = true;
         }
 
         /* Give the semaphore to unblock prvProcessSwitchInputTask.  */
@@ -544,13 +544,36 @@ static void prvDisplayTask(void *pvParameters) {
 /*-----------------------------------------------------------*/
 
 
-static void prvGameLogicTask(void *pvParameters){
-    
-    for(;;){
-        basket.lives+=1;
-        item_t *newitem;
-        NewItem(newitem, GrContextDpyWidthGet(&sContext));
-        vTaskDelay(pdMS_TO_TICKS(1000));
+static void prvGameLogicTask(void *pvParameters)
+{
+    TickType_t xLastUpdateTime = xTaskGetTickCount();
+    const TickType_t xInterval = pdMS_TO_TICKS(1000); 
+    const int moveStep = 1;  
+
+    for(;;)
+    {
+        if (g_bMoveRight) {
+            basket.currentLocation.x += moveStep;
+        }
+        if (g_bMoveLeft) {
+            basket.currentLocation.x -= moveStep;
+        }
         
+        if (GPIOPinRead(BUTTONS_GPIO_BASE, USR_SW1) != 0) {
+            g_bMoveRight = false;
+        }
+        if (GPIOPinRead(BUTTONS_GPIO_BASE, USR_SW2) != 0) {
+            g_bMoveLeft = false;
+        }
+
+        TickType_t xCurrentTime = xTaskGetTickCount();
+        if ((xCurrentTime - xLastUpdateTime) >= xInterval) {
+            basket.lives += 1;
+            item_t *newitem;
+            NewItem(newitem, GrContextDpyWidthGet(&sContext));
+            xLastUpdateTime = xCurrentTime;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
