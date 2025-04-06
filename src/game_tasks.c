@@ -374,6 +374,10 @@ void xTimerHandlerA(void) {
 
 void xTimerHandlerB(void){
     TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
+<<<<<<< HEAD
+=======
+
+>>>>>>> d15f9d6 (updated the display logic by removing the semapt)
     /* Update only time based game variables here*/
     // e.g. fruit location
     for (int i = 0; i < MAX_ITEMS; i++){
@@ -384,6 +388,9 @@ void xTimerHandlerB(void){
     }
     UpdateDisplay = true;
 }
+
+
+
 
 void xButtonsHandler(void) {
     BaseType_t xLEDTaskWoken;
@@ -501,8 +508,13 @@ static void prvDisplayTask(void *pvParameters) {
             DrawStatusBar(sContext);
             DrawGame(sContext);
             drawFruit(&sContext, itemsList);
+<<<<<<< HEAD
             drawBasket(sContext, basket);
+=======
+>>>>>>> d15f9d6 (updated the display logic by removing the semapt)
         }
+
+        
     }
 }
 /*-----------------------------------------------------------*/
