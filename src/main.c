@@ -89,7 +89,9 @@ volatile uint32_t g_ui32SysClock;
 
 /* Global for binary semaphore shared between tasks. */
 SemaphoreHandle_t xButtonSemaphore = NULL;
-
+SemaphoreHandle_t xItemsSemaphore = NULL;
+SemaphoreHandle_t xBasketSemaphore = NULL;
+SemaphoreHandle_t xDisplaySemaphore = NULL;
 /* Set up the clock and pin configurations to run this example. */
 static void prvSetupHardware( void );
 
@@ -105,6 +107,9 @@ int main( void )
     /* Create the binary semaphore used to synchronize the button ISR and the
      * button processing task. */
     xButtonSemaphore = xSemaphoreCreateBinary();
+    xItemsSemaphore = xSemaphoreCreateBinary();
+    xBasketSemaphore = xSemaphoreCreateBinary();
+    xDisplaySemaphore = xSemaphoreCreateBinary();
 
     if ( xButtonSemaphore != NULL )
     {

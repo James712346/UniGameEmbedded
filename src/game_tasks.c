@@ -61,6 +61,8 @@
 
 /* Kernel includes. */
 #include "FreeRTOS.h"
+#include "portmacro.h"
+#include "projdefs.h"
 #include "semphr.h"
 #include "task.h"
 
@@ -88,12 +90,14 @@
 #include "drivers/touch.h"
 
 #define MAX_ITEMS 25
-#define MAX_LIVES 5
+#define MAX_LIVES 10
 #define collectionLevel 225
 #define deductionLevel 230
 #define rand_a 1103515245
 #define rand_c 12345
+#define MAX_LEVELS 3
 
+const uint8_t LEVELS[MAX_LEVELS] = {5, 10, 15};
 
 volatile uint32_t seed = 1;
 volatile bool g_bMoveRight = false;
@@ -123,7 +127,9 @@ volatile static uint32_t g_pui32ButtonPressed;
  * The binary semaphore used by the switch ISR & task.
  */
 extern SemaphoreHandle_t xButtonSemaphore;
-
+extern SemaphoreHandle_t xItemsSemaphore;
+extern SemaphoreHandle_t xBasketSemaphore; 
+extern SemaphoreHandle_t xDisplaySemaphore;
 /*
  * Location Struct
  */
@@ -138,19 +144,20 @@ struct location {
 typedef struct basket_t {
     struct location currentLocation; // location x and y (y should be set as deductionLevel) 
     uint8_t size; // size of the basket
-    uint8_t lives; // score of the current game
+    uint8_t lives; // lives lost of the current game
+    uint8_t score; // Score
     uint8_t level; // difficuity of the game
 } basket_t;
 
 // Share Bucket Struct
 basket_t basket;
 tRectangle basketLine;
-SemaphoreHandle_t xDisplaySemaphore = NULL;
 
 void initBasket(tContext sContext){
     basket.size = 100;
     basket.currentLocation.x = GrContextDpyWidthGet(&sContext)/2;
     basket.lives = 0;
+    basket.score = 0;
 }
 
 void drawBasket(tContext sContext, basket_t tempBasket){
@@ -215,24 +222,37 @@ void ClearItems(){
  * Item Creator
  * @waring MUST BE PROTECTED
  */
-int NewItem(item_t *newItem, uint32_t screenWidth){
+int NewItem(uint32_t screenWidth, int level, int type){
     int i;
+    if (xSemaphoreTake(xItemsSemaphore, portMAX_DELAY) != pdPASS){
+        return -2;
+    }
     for (i=0;i <= MAX_ITEMS;i++){
         if (i == MAX_ITEMS){
             return -1;
         }
         if (itemsList[i].status == INACTIVE){
-            newItem = &itemsList[i];
             break;
         }
     }
     itemsList[i].status = ACTIVE;
-    itemsList[i].type = randInt(3)+1;
+    if (type == -1){
+        itemsList[i].type = randInt(3)+1;
+    } else {
+        itemsList[i].type = type;
+    }
     itemsList[i].currentlocation.y = 24;
+    if(level-1 > MAX_LEVELS){
+        itemsList[i].level = 2;
+    } else if (level < 0) {
+        itemsList[i].level = 0;
+    }else {
+        itemsList[i].level = level;
+    }
     itemsList[i].currentlocation.x = randInt(screenWidth-33)+16;
-    itemsList[i].previouslocation.y =24;
+    itemsList[i].previouslocation.y = 24;
     itemsList[i].previouslocation.x = randInt(screenWidth-33)+16;
-
+    xSemaphoreGive(xItemsSemaphore);
     return 0;
 }
 /*
@@ -251,9 +271,11 @@ int drawFruit(tContext *context, item_t items[MAX_ITEMS]) {
                 
                 GrContextForegroundSet(&sContext, ClrLightBlue);
                 GrRectFill(&sContext, &clearRect);
-                
-                items[i].previouslocation.x = 0;
-                items[i].previouslocation.y = 0;
+                if (xSemaphoreTake(xBasketSemaphore, portMAX_DELAY) == pdPASS){
+                    itemsList[i].previouslocation.x = 0;
+                    itemsList[i].previouslocation.y = 0;
+                    xSemaphoreGive(xBasketSemaphore);
+                }
             }
             continue;
         }
@@ -270,12 +292,16 @@ int drawFruit(tContext *context, item_t items[MAX_ITEMS]) {
             GrContextForegroundSet(&sContext, ClrLightBlue);
             GrRectFill(&sContext, &clearRect);
             
-            items[i].previouslocation.x = items[i].currentlocation.x;
-            items[i].previouslocation.y = items[i].currentlocation.y;
+            if (xSemaphoreTake(xBasketSemaphore, portMAX_DELAY) == pdPASS){
+                itemsList[i].previouslocation.x = items[i].currentlocation.x;
+                itemsList[i].previouslocation.y = items[i].currentlocation.y;
+                xSemaphoreGive(xBasketSemaphore);
+            }
         }
 
         uint8_t *asset;
         switch (items[i].type) {
+            case POWERUP:     asset = assetLevelup; break;
             case BANANA:      asset = assetBanana; break;
             case APPLE:       asset = assetApple; break;
             case PEAR:        asset = assetPear; break;
@@ -326,7 +352,6 @@ void vCreateDisplayTask(void) {
 
     /* Configure the hardware timer to run in periodic mode. */
     prvConfigureHWTimer();
-    xDisplaySemaphore = xSemaphoreCreateBinary();
     /* Create the task as described in the comments at the top of this file.
      *
      * The xTaskCreate parameters in order are:
@@ -405,7 +430,7 @@ void xTimerHandlerA(void) {
             continue;
         }
         itemsList[i].previouslocation.y = itemsList[i].currentlocation.y;
-        itemsList[i].currentlocation.y += 10;
+        itemsList[i].currentlocation.y += LEVELS[itemsList[i].level];
     }
     
     xSemaphoreGiveFromISR(xDisplaySemaphore, &xHigherPriorityTaskWoken);
@@ -461,37 +486,56 @@ void xButtonsHandler(void) {
 
 void checkItems(){
     for (int i = 0; i < MAX_ITEMS; i++){
+        if (xSemaphoreTake(xItemsSemaphore, portMAX_DELAY) != pdPASS){
+            continue;
+        }
         if (itemsList[i].status == INACTIVE){
+            xSemaphoreGive(xItemsSemaphore);
             continue;
         }
         
         int itemBottomY = itemsList[i].currentlocation.y+10;
         if (itemBottomY >= collectionLevel){
-            int delta = basket.size/2 - 24;
-            int basketLeftEdge = basket.currentLocation.x - delta - 16; 
-            int basketRightEdge = basket.currentLocation.x + delta + 16;
-            
-            int itemLeftEdge = itemsList[i].currentlocation.x;
-            int itemRightEdge = itemsList[i].currentlocation.x + 16;
-            
-            if ((itemRightEdge >= basketLeftEdge) && (itemLeftEdge <= basketRightEdge)){
-                itemsList[i].status = INACTIVE;
-                score += 1; 
-                
-                xSemaphoreGive(xDisplaySemaphore);
+            if(xSemaphoreTake(xBasketSemaphore, portMAX_DELAY) == pdPASS){
+                int delta = basket.size/2 - 24;
+                int basketLeftEdge = basket.currentLocation.x - delta - 16; 
+                int basketRightEdge = basket.currentLocation.x + delta + 16;
+
+                int itemLeftEdge = itemsList[i].currentlocation.x;
+                int itemRightEdge = itemsList[i].currentlocation.x + 16;
+
+                if ((itemRightEdge >= basketLeftEdge) && (itemLeftEdge <= basketRightEdge)){
+                    itemsList[i].status = INACTIVE;
+                    if (itemsList[i].type == POWERUP){
+                        basket.size += 20;
+                    } else {
+                        score += 1;
+                    }
+                    xSemaphoreGive(xBasketSemaphore);
+                    xSemaphoreGive(xItemsSemaphore);
+                    xSemaphoreGive(xDisplaySemaphore);
+                    continue;
+                }
+                xSemaphoreGive(xBasketSemaphore);
             }
         }
 
         if (itemBottomY >= deductionLevel){
-            if ((basket.lives < MAX_LIVES)&&(itemsList[i].status != INACTIVE)){
-                basket.lives += 1;
-
+            if(xSemaphoreTake(xBasketSemaphore, portMAX_DELAY) == pdPASS){
+                if (itemsList[i].type != POWERUP){
+                    if (basket.lives + 1 < MAX_LIVES){
+                        basket.lives += 1;
+                    } else {
+                        basket.lives += 1;
+                        TimerDisable(TIMER0_BASE, TIMER_A);
+                        xSemaphoreGive(xDisplaySemaphore);
+                    }
+                }
+                itemsList[i].status = INACTIVE;
+                xSemaphoreGive(xBasketSemaphore);
             }
-            itemsList[i].status = INACTIVE;
-            continue;
         }
-        
-        
+        xSemaphoreGive(xItemsSemaphore);
     }
 }
 
@@ -501,6 +545,7 @@ static void prvButtonTask(void *_){
 tRectangle backdrop; 
 tRectangle lava;
 tRectangle statusbar;
+tRectangle bottomBackdrop;
 
 /**
  * DrawGame
@@ -515,12 +560,7 @@ void DrawGame(tContext sContent){
 
 void DrawBottom(tContext sContent){
     GrContextForegroundSet(&sContext, ClrLightBlue);
-    tRectangle bottomBackdrop;
-    bottomBackdrop.i16XMin = 0;
-    bottomBackdrop.i16YMin = deductionLevel-12; 
-    bottomBackdrop.i16XMax = GrContextDpyWidthGet(&sContext) - 1;
-    bottomBackdrop.i16YMax = deductionLevel - 1;
-    GrRectFill(&sContext, &bottomBackdrop);
+       GrRectFill(&sContext, &bottomBackdrop);
     
     GrContextForegroundSet(&sContext, ClrRed);
     GrRectFill(&sContext, &lava);
@@ -528,7 +568,7 @@ void DrawBottom(tContext sContent){
 /**
  * Draw Hearts
  */
-void DrawStatusBar(tContext sContext){
+void DrawStatusBar(tContext sContext, basket_t tempBasket){
     GrContextForegroundSet(&sContext, ClrDarkBlue);
     GrRectFill(&sContext, &statusbar);
     
@@ -544,7 +584,7 @@ void DrawStatusBar(tContext sContext){
     GrContextForegroundSet(&sContext, ClrBlack);
     
     for (int i=0; i < MAX_LIVES; i++){
-        if (0 <= (i - basket.lives)){
+        if (0 <= (i - tempBasket.lives)){
             GrTransparentImageDraw(&sContext, assetHeart, GrContextDpyWidthGet(&sContext) - (MAX_LIVES - i)*17 - 1,5, ClrBlack);
         } else {
             GrTransparentImageDraw(&sContext, assetHeartlost, GrContextDpyWidthGet(&sContext) - (MAX_LIVES - i)*17 - 1,5, ClrBlack);
@@ -578,22 +618,37 @@ static void prvDisplayTask(void *pvParameters) {
     statusbar.i16YMin = 0;
     statusbar.i16XMax = GrContextDpyWidthGet(&sContext) - 1;
     statusbar.i16YMax = 23;
+    bottomBackdrop.i16XMin = 0;
+    bottomBackdrop.i16YMin = deductionLevel-12; 
+    bottomBackdrop.i16XMax = GrContextDpyWidthGet(&sContext) - 1;
+    bottomBackdrop.i16YMax = deductionLevel - 1;
+
     DrawGame(sContext);
-    DrawStatusBar(sContext);
+    DrawStatusBar(sContext, basket);
+    xSemaphoreGive(xItemsSemaphore);
+    xSemaphoreGive(xBasketSemaphore);
     //
     // Main loop for display task
     //
     for (;;) {
-        /* Block until the Push Button ISR gives the semaphore. */
-
-
-        // if () {
-        // }
         if(xSemaphoreTake(xDisplaySemaphore,portMAX_DELAY) == pdPASS){
             DrawBottom(sContext);
-            drawFruit(&sContext, itemsList);
-            drawBasket(sContext, basket);
-            DrawStatusBar(sContext);
+            // Get Item and Basket List for display
+            if (xSemaphoreTake(xItemsSemaphore, portMAX_DELAY) == pdPASS){
+                item_t temp_itemList[MAX_ITEMS];
+                for (int i=0; i < MAX_ITEMS;i++){
+                    temp_itemList[i] = itemsList[i];
+                }
+                xSemaphoreGive(xItemsSemaphore);
+                drawFruit(&sContext, temp_itemList);
+            }
+            // Give
+            if (xSemaphoreTake(xBasketSemaphore, portMAX_DELAY) == pdPASS){
+                basket_t temp_basket = basket;
+                xSemaphoreGive(xBasketSemaphore);
+                drawBasket(sContext, temp_basket);
+                DrawStatusBar(sContext, temp_basket);
+            }
         }
 
     }
@@ -605,22 +660,27 @@ static void prvGameLogicTask(void *pvParameters)
 {
     TickType_t xLastUpdateTime = xTaskGetTickCount();
     TickType_t xLastMoveTime = xLastUpdateTime;
+    TickType_t xLastLevelTime = xLastUpdateTime;
     
-    const TickType_t xItemInterval = pdMS_TO_TICKS(1000); 
+    const TickType_t xItemInterval = pdMS_TO_TICKS(2e3); 
+    const TickType_t xLevelInterval = pdMS_TO_TICKS(1e4);
     const TickType_t xMoveInterval = 10;
-    const int moveStep = 1;
+    const int moveStep = 2;
+    int level = 0;
 
     for (;;)
     {
         TickType_t xCurrentTime = xTaskGetTickCount();
 
         if ((xCurrentTime - xLastMoveTime) >= xMoveInterval) {
+            xSemaphoreTake(xBasketSemaphore, portMAX_DELAY);
             if (g_bMoveRight) {
                 basket.currentLocation.x += moveStep;
             }
             if (g_bMoveLeft) {
                 basket.currentLocation.x -= moveStep;
             }
+            xSemaphoreGive(xBasketSemaphore);
             xLastMoveTime = xCurrentTime;
         }
 
@@ -629,11 +689,16 @@ static void prvGameLogicTask(void *pvParameters)
         }
         if (GPIOPinRead(BUTTONS_GPIO_BASE, USR_SW2) != 0) {
             g_bMoveLeft = false;
+         }
+        if ((xCurrentTime - xLastLevelTime) >= xLevelInterval && level-1 < MAX_LEVELS){
+            level += 1;
+            NewItem(GrContextDpyWidthGet(&sContext), 2, 0);
+            xLastLevelTime = xCurrentTime;
         }
-
         if ((xCurrentTime - xLastUpdateTime) >= xItemInterval) {
-            item_t *newitem;
-            NewItem(newitem, GrContextDpyWidthGet(&sContext));
+            for (int i = 0; i <= level; i++){
+                NewItem(GrContextDpyWidthGet(&sContext), i, -1);
+            }
             xLastUpdateTime = xCurrentTime;
         }
 
