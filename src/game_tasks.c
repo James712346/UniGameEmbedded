@@ -221,7 +221,7 @@ int drawFruit(tContext *context, item_t items[MAX_ITEMS]){
             case WATERMELON:  asset = assetWatermelon; break;
             default: return 1;
         }
-        GrTransparentImageDraw(&sContext, asset, items[i].currentlocation.x,items[i].currentlocation.y, 0xFFFFFF);
+        GrTransparentImageDraw(&sContext, asset, items[i].currentlocation.x,items[i].currentlocation.y, 0x00);
     }
     return 0;
 }
