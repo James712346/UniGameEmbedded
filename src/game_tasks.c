@@ -141,6 +141,25 @@ typedef struct basket_t {
 
 // Share Bucket Struct
 basket_t basket;
+tRectangle basketLine;
+
+void initBasket(tContext sContext){
+    basket.size = 60;
+    basket.currentLocation.x = GrContextDpyWidthGet(&sContext)/2;
+    basket.lives = 0;
+}
+
+void drawBasket(tContext sContext, basket_t tempBasket){
+    GrContextForegroundSet(&sContext, ClrBrown);
+    int delta = tempBasket.size/2 - 24;
+    basketLine.i16XMin = tempBasket.currentLocation.x - delta;
+    basketLine.i16XMax = tempBasket.currentLocation.x + delta;
+    basketLine.i16YMin = deductionLevel-5;
+    basketLine.i16YMax = deductionLevel-1;
+    GrRectFill(&sContext, &basketLine);
+    GrTransparentImageDraw(&sContext, assetBasketlhs, tempBasket.currentLocation.x - delta - 16, deductionLevel - 17, 0x00);
+    GrTransparentImageDraw(&sContext, assetBasketrhs, tempBasket.currentLocation.x + delta, deductionLevel - 17, 0x00);
+}
 
 /*
  * Item Variables
@@ -309,29 +328,21 @@ static void prvConfigureButton(void) {
 
 /*-----------------------------------------------------------*/
 
-static void prvConfigureHWTimer( void )
-{
+static void prvConfigureHWTimer(void) {
     /* The Timer 0 peripheral must be enabled for use. */
     SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
 
     /* Configure Timer 0 in full-width periodic mode. */
-    TimerConfigure(TIMER0_BASE, TIMER_CFG_A_PERIODIC | TIMER_CFG_B_PERIODIC);
+    TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
 
     /* Set the Timer 0A load value to run at 5 Hz. */
     TimerLoadSet(TIMER0_BASE, TIMER_A, g_ui32SysClock / 5);
 
-    TimerLoadSet(TIMER0_BASE, TIMER_B, g_ui32SysClock / 5);
-
-
     /* Configure the Timer 0A interrupt for timeout. */
     TimerIntEnable(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
-    TimerIntEnable(TIMER0_BASE, TIMER_TIMB_TIMEOUT);
-
 
     /* Enable the Timer 0A interrupt in the NVIC. */
     IntEnable(INT_TIMER0A);
-    IntEnable(INT_TIMER0B);
-
 
     /* Enable global interrupts in the NVIC. */
     IntMasterEnable();
@@ -341,8 +352,6 @@ static void prvConfigureHWTimer( void )
     // You may need change where this timer is enabled
     //
     TimerEnable(TIMER0_BASE, TIMER_A);
-    TimerEnable(TIMER0_BASE, TIMER_B);
-
 }
 
 /*-----------------------------------------------------------*/
@@ -363,12 +372,8 @@ void xTimerHandlerA(void) {
     UpdateDisplay = true;
 }
 
-
-void xTimerHandlerB(void) {
-
-    /* Clear the hardware interrupt flag for Timer 0A. */
+void xTimerHandlerB(void){
     TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
-
     /* Update only time based game variables here*/
     // e.g. fruit location
     for (int i = 0; i < MAX_ITEMS; i++){
@@ -379,9 +384,6 @@ void xTimerHandlerB(void) {
     }
     UpdateDisplay = true;
 }
-
-
-
 
 void xButtonsHandler(void) {
     BaseType_t xLEDTaskWoken;
@@ -438,6 +440,8 @@ void DrawGame(tContext sContent){
     GrRectFill(&sContext,&backdrop);
     GrContextForegroundSet(&sContext, ClrRed);
     GrRectFill(&sContext,&lava);
+
+    drawFruit(&sContext, itemsList);
 }
 
 /**
@@ -468,6 +472,7 @@ static void prvDisplayTask(void *pvParameters) {
     // Initialize the graphics context.
     //
     GrContextInit(&sContext, &g_sKentec320x240x16_SSD2119);
+    initBasket(sContext);
     backdrop.i16XMin = 0;
     backdrop.i16YMin = 24;
     backdrop.i16XMax = GrContextDpyWidthGet(&sContext) - 1;
@@ -496,9 +501,8 @@ static void prvDisplayTask(void *pvParameters) {
             DrawStatusBar(sContext);
             DrawGame(sContext);
             drawFruit(&sContext, itemsList);
+            drawBasket(sContext, basket);
         }
-
-        
     }
 }
 /*-----------------------------------------------------------*/
