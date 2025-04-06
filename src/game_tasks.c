@@ -304,21 +304,29 @@ static void prvConfigureButton(void) {
 
 /*-----------------------------------------------------------*/
 
-static void prvConfigureHWTimer(void) {
+static void prvConfigureHWTimer( void )
+{
     /* The Timer 0 peripheral must be enabled for use. */
     SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
 
     /* Configure Timer 0 in full-width periodic mode. */
-    TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
+    TimerConfigure(TIMER0_BASE, TIMER_CFG_A_PERIODIC | TIMER_CFG_B_PERIODIC);
 
     /* Set the Timer 0A load value to run at 5 Hz. */
     TimerLoadSet(TIMER0_BASE, TIMER_A, g_ui32SysClock / 5);
 
+    TimerLoadSet(TIMER0_BASE, TIMER_B, g_ui32SysClock / 5);
+
+
     /* Configure the Timer 0A interrupt for timeout. */
     TimerIntEnable(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
+    TimerIntEnable(TIMER0_BASE, TIMER_TIMB_TIMEOUT);
+
 
     /* Enable the Timer 0A interrupt in the NVIC. */
     IntEnable(INT_TIMER0A);
+    IntEnable(INT_TIMER0B);
+
 
     /* Enable global interrupts in the NVIC. */
     IntMasterEnable();
@@ -328,6 +336,8 @@ static void prvConfigureHWTimer(void) {
     // You may need change where this timer is enabled
     //
     TimerEnable(TIMER0_BASE, TIMER_A);
+    TimerEnable(TIMER0_BASE, TIMER_B);
+
 }
 
 /*-----------------------------------------------------------*/

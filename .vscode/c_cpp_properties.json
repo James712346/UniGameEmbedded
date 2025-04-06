@@ -1,0 +1,51 @@
+//
+// !!! WARNING !!! AUTO-GENERATED FILE!
+// PLEASE DO NOT MODIFY IT AND USE "platformio.ini":
+// https://docs.platformio.org/page/projectconf/section_env_build.html#build-flags
+//
+{
+    "configurations": [
+        {
+            "name": "PlatformIO",
+            "includePath": [
+                "C:/Users/filip/UniGameEmbedded/include",
+                "C:/Users/filip/UniGameEmbedded/src",
+                "C:/Users/filip/UniGameEmbedded/lib/grlib",
+                "C:/third_party/FreeRTOS/include",
+                "C:/third_party/FreeRTOS/portable/GCC/ARM_CM4F",
+                ""
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "path": [
+                    "C:/Users/filip/UniGameEmbedded/include",
+                    "C:/Users/filip/UniGameEmbedded/src",
+                    "C:/Users/filip/UniGameEmbedded/lib/grlib",
+                    "C:/third_party/FreeRTOS/include",
+                    "C:/third_party/FreeRTOS/portable/GCC/ARM_CM4F",
+                    ""
+                ]
+            },
+            "defines": [
+                "F_CPU=120000000L",
+                "PLATFORMIO=60118",
+                "ENERGIA_ARCH_TIVAC",
+                "ENERGIA_EK_TM4C1294XL",
+                "PART_TM4C1294NCPDT",
+                "TARGET_IS_TM4C129_RA2",
+                ""
+            ],
+            "cStandard": "gnu11",
+            "cppStandard": "gnu++11",
+            "compilerPath": "C:/Users/filip/.platformio/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-gcc.exe",
+            "compilerArgs": [
+                "-mthumb",
+                "-mcpu=cortex-m4",
+                "-mfpu=fpv4-sp-d16",
+                "-mfloat-abi=softfp",
+                ""
+            ]
+        }
+    ],
+    "version": 4
+}
