@@ -142,6 +142,7 @@ typedef struct basket_t {
 // Share Bucket Struct
 basket_t basket;
 tRectangle basketLine;
+SemaphoreHandle_t xDisplaySemaphore = NULL;
 
 void initBasket(tContext sContext){
     basket.size = 60;
@@ -193,7 +194,7 @@ volatile item_t itemsList[MAX_ITEMS];
  */
 tContext sContext;
 tRectangle sRect;
-volatile bool UpdateDisplay = true;
+BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
 /*
  * Clear Item List
@@ -285,7 +286,7 @@ void vCreateDisplayTask(void) {
 
     /* Configure the hardware timer to run in periodic mode. */
     prvConfigureHWTimer();
-
+    xDisplaySemaphore = xSemaphoreCreateBinary();
     /* Create the task as described in the comments at the top of this file.
      *
      * The xTaskCreate parameters in order are:
@@ -364,25 +365,21 @@ void xTimerHandlerA(void) {
     /* Update only time based game variables here*/
     // e.g. fruit location
     for (int i = 0; i < MAX_ITEMS; i++){
+        if(deductionLevel == (itemsList[i].currentlocation.y + 16)){
+            itemsList[i].status = INACTIVE;
+        }
         if ((itemsList[i].status == INACTIVE) ||(deductionLevel == (itemsList[i].currentlocation.y + 16))){
             continue;
         }
         itemsList[i].currentlocation.y += 10;
     }
-    UpdateDisplay = true;
+    xSemaphoreGiveFromISR(xDisplaySemaphore, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 void xTimerHandlerB(void){
-    TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
-    /* Update only time based game variables here*/
-    // e.g. fruit location
-    for (int i = 0; i < MAX_ITEMS; i++){
-        if ((itemsList[i].status == INACTIVE) ||(deductionLevel == (itemsList[i].currentlocation.y + 16))){
-            continue;
-        }
-        itemsList[i].currentlocation.y += 10;
-    }
-    UpdateDisplay = true;
+    TimerIntClear(TIMER0_BASE, TIMER_TIMB_TIMEOUT);
+
 }
 
 void xButtonsHandler(void) {
@@ -405,10 +402,12 @@ void xButtonsHandler(void) {
     // but if too small can lead to debouncing issues
     if ((xTaskGetTickCount() - g_ui32TimeStamp) > 100) {
         /* Log which button was pressed to trigger the ISR. */
-        if ((ui32Status & USR_SW1) == USR_SW1) {
+        if ((ui32Status & USR_SW1)) {
             g_pui32ButtonPressed = USR_SW1;
-        } else if ((ui32Status & USR_SW2) == USR_SW2) {
+            basket.currentLocation.x+=10;
+        } else if ((ui32Status & USR_SW2)) {
             g_pui32ButtonPressed = USR_SW2;
+            basket.currentLocation.x-=10;
         }
 
         /* Give the semaphore to unblock prvProcessSwitchInputTask.  */
@@ -421,9 +420,45 @@ void xButtonsHandler(void) {
 
     /* Update the time stamp. */
     g_ui32TimeStamp = xTaskGetTickCount();
-    UpdateDisplay = false;
+    xSemaphoreGiveFromISR(xDisplaySemaphore, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 /*-----------------------------------------------------------*/
+
+
+void checkItems(){
+    for (int i = 0; i < MAX_ITEMS; i++){
+        // Take the Item Semaphone Here!
+        if (itemsList[i].status == INACTIVE){
+            // Give Back Item Semaphone
+            continue;
+        }
+        if (itemsList[i].currentlocation.y+16 >= deductionLevel){
+            itemsList[i].status = INACTIVE;
+            // Take Basket Semaphone
+            if (basket.lives <= MAX_LIVES){
+                basket.lives += 1;
+            } else {
+                // Call Game over
+            }
+            // Give back both Semaphones
+            continue;
+        }
+
+        if (itemsList[i].currentlocation.y+16 >= collectionLevel){
+            // Take Basket Semaphone Here!
+            int delta = basket.size/2;
+            int upperBound = basket.currentLocation.x + delta;
+            int lowerBound = basket.currentLocation.x - delta;
+            if  ( lowerBound <= itemsList[i].currentlocation.x <= upperBound || lowerBound <= itemsList[i].currentlocation.x + 16 <= upperBound){
+                itemsList[i].status = INACTIVE;
+            }
+            // Give back both Semaphones
+        }
+        // Give back Item Semaphone
+
+    }
+}
 
 static void prvButtonTask(void *_){
 
@@ -494,15 +529,16 @@ static void prvDisplayTask(void *pvParameters) {
         /* Block until the Push Button ISR gives the semaphore. */
 
 
-        // if (xSemaphoreTake(xButtonSemaphore, portMAX_DELAY) == pdPASS) {
+        // if () {
         // }
-        if(UpdateDisplay){
-            UpdateDisplay = false;
+        if(xSemaphoreTake(xDisplaySemaphore,portMAX_DELAY) == pdPASS){
+
             DrawStatusBar(sContext);
             DrawGame(sContext);
             drawFruit(&sContext, itemsList);
             drawBasket(sContext, basket);
         }
+
     }
 }
 /*-----------------------------------------------------------*/
@@ -514,7 +550,6 @@ static void prvGameLogicTask(void *pvParameters){
         basket.lives+=1;
         item_t *newitem;
         NewItem(newitem, GrContextDpyWidthGet(&sContext));
-        
         vTaskDelay(pdMS_TO_TICKS(1000));
         
     }
