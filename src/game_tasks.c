@@ -195,7 +195,8 @@ enum itemType {
   APPLE,
   PEAR,
   WATERMELON,
-  POWERUP // Increases the Size of the basket, but doesen't deduct the score
+  POWERUP, // Increases the Size of the basket, but doesen't deduct the score
+  HEART
 };
 
 typedef struct item_t {
@@ -311,6 +312,9 @@ int drawFruit(tContext *context, item_t items[MAX_ITEMS]) {
     switch (items[i].type) {
     case POWERUP:
       asset = assetLevelup;
+      break;
+    case HEART:
+      asset = assetHeart;
       break;
     case BANANA:
       asset = assetBanana;
@@ -523,7 +527,11 @@ void checkItems() {
             (itemLeftEdge <= basketRightEdge)) {
           itemsList[i].status = INACTIVE;
           if (itemsList[i].type > 3) {
-            basket.size += 20;
+              if (itemsList[i].type == POWERUP){
+                basket.size += 20;
+              } else if (itemsList[i].type == HEART){
+                if( basket.lives > 0) basket.lives -= 1;
+              }
           } else {
             basket.score += 1;
           }
@@ -538,7 +546,7 @@ void checkItems() {
 
     if (itemBottomY >= lava.i16YMin ) {
       if (xSemaphoreTake(xBasketSemaphore, portMAX_DELAY) == pdPASS) {
-        if (itemsList[i].type > 3) {
+        if (itemsList[i].type < 4) {
           if (basket.lives + 1 < MAX_LIVES) {
             basket.lives += 1;
           } else {
@@ -750,10 +758,15 @@ static void prvGameLogicTask(void *pvParameters) {
     if (GPIOPinRead(BUTTONS_GPIO_BASE, USR_SW2) != 0) {
       g_bMoveLeft = false;
     }
-    if ((xCurrentTime - xLastLevelTime) >= xLevelInterval &&
-        level - 1 < MAX_LEVELS) {
-      level += 1;
-      NewItem(GrContextDpyWidthGet(&sContext), 2, POWERUP);
+    if ((xCurrentTime - xLastLevelTime) >= xLevelInterval) {
+        if ( level - 1 < MAX_LEVELS) {
+        level += 1;
+        }
+      if (randInt(100) < 50){
+        NewItem(GrContextDpyWidthGet(&sContext), 2, POWERUP);
+      } else {
+        NewItem(GrContextDpyWidthGet(&sContext), 2, HEART);
+      }
       xLastLevelTime = xCurrentTime;
     }
     if ((xCurrentTime - xLastUpdateTime) >= xItemInterval) {
