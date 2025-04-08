@@ -191,12 +191,11 @@ enum STATUS { INACTIVE, ACTIVE };
 // Enum of Types POWERUP - 0, FRUIT - 1
 // Note: Powerup should show up at every x level up. (x could be set as a marco)
 enum itemType {
-  POWERUP, // Increases the Size of the basket, but doesen't deduct the score
-           // when it reaches it final y value
   BANANA,
   APPLE,
   PEAR,
-  WATERMELON
+  WATERMELON,
+  POWERUP // Increases the Size of the basket, but doesen't deduct the score
 };
 
 typedef struct item_t {
@@ -245,7 +244,7 @@ int NewItem(uint32_t screenWidth, int level, int type) {
   }
   itemsList[i].status = ACTIVE;
   if (type == -1) {
-    itemsList[i].type = randInt(3) + 1;
+    itemsList[i].type = randInt(4);
   } else {
     itemsList[i].type = type;
   }
@@ -513,7 +512,7 @@ void checkItems() {
     int itemBottomY = itemsList[i].currentlocation.y + 10;
     if (itemBottomY >= lava.i16YMin - collectionLevel) {
       if (xSemaphoreTake(xBasketSemaphore, portMAX_DELAY) == pdPASS) {
-        int delta = basket.size / 2 - 24;
+        int delta = basket.size / 2 - 16;
         int basketLeftEdge = basket.currentLocation.x - delta - 16;
         int basketRightEdge = basket.currentLocation.x + delta + 16;
 
@@ -523,7 +522,7 @@ void checkItems() {
         if ((itemRightEdge >= basketLeftEdge) &&
             (itemLeftEdge <= basketRightEdge)) {
           itemsList[i].status = INACTIVE;
-          if (itemsList[i].type == POWERUP) {
+          if (itemsList[i].type > 3) {
             basket.size += 20;
           } else {
             basket.score += 1;
@@ -539,7 +538,7 @@ void checkItems() {
 
     if (itemBottomY >= lava.i16YMin ) {
       if (xSemaphoreTake(xBasketSemaphore, portMAX_DELAY) == pdPASS) {
-        if (itemsList[i].type != POWERUP) {
+        if (itemsList[i].type > 3) {
           if (basket.lives + 1 < MAX_LIVES) {
             basket.lives += 1;
           } else {
@@ -614,7 +613,7 @@ void DrawStatusBar(tContext sContext, basket_t tempBasket) {
 
 void splashScreen(tContext sContext, basket_t temp_basket) {
     if (temp_basket.state == GAMESTART){
-        GrImageDraw(&sContext, assetIntructions, 80, 60);
+        GrTransparentImageDraw(&sContext, assetIntructionsv3, 0, 0, 0x00);
     } else {
         GrImageDraw(&sContext, assetGameover, 80, 60);
     }
@@ -754,7 +753,7 @@ static void prvGameLogicTask(void *pvParameters) {
     if ((xCurrentTime - xLastLevelTime) >= xLevelInterval &&
         level - 1 < MAX_LEVELS) {
       level += 1;
-      NewItem(GrContextDpyWidthGet(&sContext), 2, 0);
+      NewItem(GrContextDpyWidthGet(&sContext), 2, POWERUP);
       xLastLevelTime = xCurrentTime;
     }
     if ((xCurrentTime - xLastUpdateTime) >= xItemInterval) {
