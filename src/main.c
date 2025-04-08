@@ -92,6 +92,7 @@ SemaphoreHandle_t xButtonSemaphore = NULL;
 SemaphoreHandle_t xItemsSemaphore = NULL;
 SemaphoreHandle_t xBasketSemaphore = NULL;
 SemaphoreHandle_t xDisplaySemaphore = NULL;
+SemaphoreHandle_t xDisplayRestartSemaphore = NULL;
 /* Set up the clock and pin configurations to run this example. */
 static void prvSetupHardware( void );
 
@@ -110,8 +111,9 @@ int main( void )
     xItemsSemaphore = xSemaphoreCreateBinary();
     xBasketSemaphore = xSemaphoreCreateBinary();
     xDisplaySemaphore = xSemaphoreCreateBinary();
+    xDisplayRestartSemaphore = xSemaphoreCreateBinary();
 
-    if ( xButtonSemaphore != NULL )
+    if ( xButtonSemaphore != NULL && xItemsSemaphore != NULL && xBasketSemaphore != NULL && xDisplaySemaphore != NULL && xDisplayRestartSemaphore != NULL)
     {
         /* Configure application specific hardware and initialize the tasks. */
         vCreateDisplayTask();
