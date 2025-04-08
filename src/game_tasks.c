@@ -269,17 +269,43 @@ int NewItem(uint32_t screenWidth, int level, int type) {
  */
 int drawFruit(tContext *context, item_t items[MAX_ITEMS]) {
   for (int i = 0; i < MAX_ITEMS; i++) {
+    uint8_t *asset;
+    uint8_t *assetinv;
+    GrContextForegroundSet(&sContext, ClrLightBlue);
+    switch (items[i].type) {
+        case POWERUP:
+            asset = assetLevelup;
+            assetinv = assetLevelup_inv;
+            break;
+        case HEART:
+            asset = assetHeart;
+            break;
+        case BANANA:
+            asset = assetBanana;
+            assetinv = assetBanana_inv;
+            break;
+        case APPLE:
+            asset = assetApple;
+            assetinv = assetApple_inv;
+            break;
+        case PEAR:
+            asset = assetPear;
+            assetinv = assetPear_inv;
+            break;
+        case WATERMELON:
+            asset = assetWatermelon;
+            assetinv = assetWatermelon_inv;
+            break;
+        default:
+            return 1;
+        }
     if (items[i].status == INACTIVE) {
+
       if (items[i].previouslocation.x != 0 ||
           items[i].previouslocation.y != 0) {
-        tRectangle clearRect;
-        clearRect.i16XMin = items[i].previouslocation.x;
-        clearRect.i16YMin = items[i].previouslocation.y;
-        clearRect.i16XMax = items[i].previouslocation.x + 16;
-        clearRect.i16YMax = items[i].previouslocation.y + 16;
 
-        GrContextForegroundSet(&sContext, ClrLightBlue);
-        GrRectFill(&sContext, &clearRect);
+        GrImageDraw(&sContext, assetinv, items[i].previouslocation.x,
+            items[i].previouslocation.y);
         if (xSemaphoreTake(xBasketSemaphore, portMAX_DELAY) == pdPASS) {
           itemsList[i].previouslocation.x = 0;
           itemsList[i].previouslocation.y = 0;
@@ -291,6 +317,7 @@ int drawFruit(tContext *context, item_t items[MAX_ITEMS]) {
 
     if (items[i].previouslocation.x != items[i].currentlocation.x ||
         items[i].previouslocation.y != items[i].currentlocation.y) {
+            
 
       tRectangle clearRect;
       clearRect.i16XMin = items[i].previouslocation.x;
@@ -298,38 +325,14 @@ int drawFruit(tContext *context, item_t items[MAX_ITEMS]) {
       clearRect.i16XMax = items[i].previouslocation.x + 16;
       clearRect.i16YMax = items[i].previouslocation.y + 16;
 
-      GrContextForegroundSet(&sContext, ClrLightBlue);
-      GrRectFill(&sContext, &clearRect);
+      GrImageDraw(&sContext, assetinv, items[i].previouslocation.x-16,
+        items[i].previouslocation.y-16);
 
       if (xSemaphoreTake(xBasketSemaphore, portMAX_DELAY) == pdPASS) {
         itemsList[i].previouslocation.x = items[i].currentlocation.x;
         itemsList[i].previouslocation.y = items[i].currentlocation.y;
         xSemaphoreGive(xBasketSemaphore);
       }
-    }
-
-    uint8_t *asset;
-    switch (items[i].type) {
-    case POWERUP:
-      asset = assetLevelup;
-      break;
-    case HEART:
-      asset = assetHeart;
-      break;
-    case BANANA:
-      asset = assetBanana;
-      break;
-    case APPLE:
-      asset = assetApple;
-      break;
-    case PEAR:
-      asset = assetPear;
-      break;
-    case WATERMELON:
-      asset = assetWatermelon;
-      break;
-    default:
-      return 1;
     }
     GrTransparentImageDraw(&sContext, asset, items[i].currentlocation.x,
                            items[i].currentlocation.y, 0x00);
